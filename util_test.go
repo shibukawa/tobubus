@@ -27,6 +27,6 @@ func newPluginForTest(pipeName, id string, t *testing.T) (*Plugin, *mockconn.Con
 		id:        id,
 		socket:    socket,
 		objectMap: make(map[string]*Proxy),
-		session:   make(map[uint32]chan *message),
+		sessions:  newSessionManager(),
 	}, socket
 }

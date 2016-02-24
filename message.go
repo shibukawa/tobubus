@@ -35,10 +35,10 @@ type methodCall struct {
 	Params []interface{} `json:"params"`
 }
 
-func archiveMessage(msg MessageType, msgID uint32, body []byte) []byte {
+func archiveMessage(msg MessageType, sessionID uint32, body []byte) []byte {
 	result := make([]byte, 12+len(body))
 	binary.LittleEndian.PutUint32(result, uint32(msg))
-	binary.LittleEndian.PutUint32(result[4:], msgID)
+	binary.LittleEndian.PutUint32(result[4:], sessionID)
 	binary.LittleEndian.PutUint32(result[8:], uint32(len(body)))
 	copy(result[12:], body)
 	return result
@@ -51,7 +51,7 @@ func parseMessage(conn net.Conn) (*message, error) {
 		return nil, err
 	}
 	messageType := binary.LittleEndian.Uint32(header)
-	messageID := binary.LittleEndian.Uint32(header[4:])
+	sessionID := binary.LittleEndian.Uint32(header[4:])
 	bodySize := binary.LittleEndian.Uint32(header[8:])
 	var body []byte
 	if bodySize > 0 {
@@ -63,7 +63,7 @@ func parseMessage(conn net.Conn) (*message, error) {
 	}
 	return &message{
 		Type: MessageType(messageType),
-		ID:   messageID,
+		ID:   sessionID,
 		body: body,
 	}, nil
 }
