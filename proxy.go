@@ -23,8 +23,9 @@ func NewProxy(instance interface{}) (*Proxy, error) {
 		return nil, errors.New("can't register nil")
 	}
 	proxy := &Proxy{
-		instance: instance,
-		methods:  make(map[string]reflect.Value),
+		instance:       instance,
+		methods:        make(map[string]reflect.Value),
+		privateMethods: make(map[string]bool),
 	}
 	v := reflect.ValueOf(instance)
 	t := v.Type()

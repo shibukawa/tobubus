@@ -4,21 +4,6 @@ import (
 	"testing"
 )
 
-type testStruct struct {
-	args   []string
-	result string
-}
-
-func (ts *testStruct) TestMethod(arg string) string {
-	ts.args = []string{arg}
-	return ts.result
-}
-
-func (ts *testStruct) testMethod(arg string) string {
-	ts.args = []string{arg}
-	return ts.result
-}
-
 func TestProxyCallMethod(t *testing.T) {
 	obj := &testStruct{
 		result: "result value",
