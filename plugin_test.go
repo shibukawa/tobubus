@@ -185,6 +185,41 @@ func TestPluginCallMethod(t *testing.T) {
 	socket.Verify()
 }
 
+func TestPluginCallLocalMethod(t *testing.T) {
+	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
+	messageId := plugin.messageID() + 1
+	socket.SetExpectedActions(
+		mockconn.Write(archiveMessage(Publish, messageId, []byte("/image/reader"))),
+		mockconn.Read(archiveMessage(ResultOK, messageId, nil)),
+	)
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		plugin.receiveMessage()
+	}()
+
+	obj := testStruct{result: "ok"}
+	err := plugin.Publish("/image/reader", &obj)
+	if err != nil {
+		t.Error("result should not be nil")
+	}
+	result, err := plugin.Call("/image/reader", "TestMethod", "test value")
+	if err != nil {
+		t.Errorf("error should be nil, but %v", err)
+	}
+	if len(result) != 1 {
+		t.Errorf("obj.TestMethod should return one value, but %d result is returned", len(result))
+	} else if result[0] != "ok" {
+		t.Errorf("obj.TestMethod should return 'ok' but '%v' is returnd", result[0])
+	}
+	if len(obj.args) != 1 {
+		t.Errorf("obj.TestMethod should be called with one argument, but %d argument is passed", len(obj.args))
+	} else if obj.args[0] != "test value" {
+		t.Errorf("obj.args[0] should be 'image.png', but %v", obj.args[0])
+	}
+
+	socket.Verify()
+}
+
 func TestPluginMethodCalledFromHost(t *testing.T) {
 	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
 	hostMessageId := uint32(45)

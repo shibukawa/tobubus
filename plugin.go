@@ -183,6 +183,9 @@ func (p *Plugin) ID() string {
 
 func (p *Plugin) Call(path, methodName string, params ...interface{}) ([]interface{}, error) {
 	messageID := p.messageID()
+	if obj, ok := p.objectMap[path]; ok {
+		return obj.Call(methodName, params...)
+	}
 	data, err := archiveMethodCallMessage(CallMethod, messageID, path, methodName, params)
 	if err != nil {
 		return nil, err
