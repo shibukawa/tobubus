@@ -23,7 +23,7 @@ func NewHost(pipeName string) *Host {
 	server := localsocket.NewLocalServer(pipeName)
 	host := &Host{
 		server:               server,
-		sessions:             newSessionManager(),
+		sessions:             newSessionManager(recycleStrategy),
 		pluginReservedSpaces: make(map[string]net.Conn),
 		localObjectMap:       make(map[string]*Proxy),
 		sockets:              make(map[string]net.Conn),

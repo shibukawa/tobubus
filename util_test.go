@@ -1,7 +1,9 @@
 package tobubus
 
 import (
+	"github.com/shibukawa/localsocket"
 	"github.com/shibukawa/mockconn"
+	"net"
 	"testing"
 )
 
@@ -27,6 +29,21 @@ func newPluginForTest(pipeName, id string, t *testing.T) (*Plugin, *mockconn.Con
 		id:        id,
 		socket:    socket,
 		objectMap: make(map[string]*Proxy),
-		sessions:  newSessionManager(),
+		sessions:  newSessionManager(incrementStrategy),
 	}, socket
+}
+
+func newHostForTest(pipeName string) *Host {
+	server := localsocket.NewLocalServer(pipeName)
+	host := &Host{
+		server:               server,
+		sessions:             newSessionManager(incrementStrategy),
+		pluginReservedSpaces: make(map[string]net.Conn),
+		localObjectMap:       make(map[string]*Proxy),
+		sockets:              make(map[string]net.Conn),
+	}
+	server.SetOnConnectionCallback(func(socket net.Conn) {
+		go host.listenAndServeTo(socket)
+	})
+	return host
 }

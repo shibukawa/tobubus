@@ -29,7 +29,7 @@ func NewPlugin(pipeName, id string) (*Plugin, error) {
 		id:        id,
 		socket:    socket,
 		objectMap: make(map[string]*Proxy),
-		sessions:  newSessionManager(),
+		sessions:  newSessionManager(recycleStrategy),
 	}, nil
 }
 

@@ -7,7 +7,7 @@ import (
 )
 
 func TestHostStartAndRegisterAndUnregisterPlugin(t *testing.T) {
-	host := NewHost("pipe.test")
+	host := newHostForTest("pipe.test")
 	socket := mockconn.New(t)
 	sessionID := host.sessions.getUniqueSessionID() + 1
 	socket.SetExpectedActions(
