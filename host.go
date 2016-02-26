@@ -34,6 +34,21 @@ func NewHost(pipeName string) *Host {
 	return host
 }
 
+func (h *Host) GetSocket(pluginID string) net.Conn {
+	return h.sockets[pluginID]
+}
+
+func (h *Host) GetPluginID(pluginSocket net.Conn) string {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	for id, socket := range h.sockets {
+		if socket == pluginSocket {
+			return id
+		}
+	}
+	return ""
+}
+
 func (h *Host) Listen() error {
 	return h.server.Listen()
 }
