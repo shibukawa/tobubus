@@ -9,41 +9,41 @@ import (
 
 func TestPluginRegister(t *testing.T) {
 	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
-	messageId := plugin.sessions.getUniqueSessionID() + 1
+	sessionID := plugin.sessions.getUniqueSessionID() + 1
 	socket.SetExpectedActions(
-		mockconn.Write(archiveMessage(RegisterClient, messageId, []byte("github.com/shibukawa/tobubus/1"))),
-		mockconn.Read(archiveMessage(ResultOK, messageId, nil)),
+		mockconn.Write(archiveMessage(RegisterClient, sessionID, []byte("github.com/shibukawa/tobubus/1"))),
+		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		plugin.receiveMessage()
 	}()
-	plugin.Register()
+	plugin.register()
 	socket.Verify()
 }
 
 func TestPluginRegisterError(t *testing.T) {
 	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
-	messageId := plugin.sessions.getUniqueSessionID() + 1
+	sessionID := plugin.sessions.getUniqueSessionID() + 1
 	socket.SetExpectedActions(
-		mockconn.Write(archiveMessage(RegisterClient, messageId, []byte("github.com/shibukawa/tobubus/1"))),
-		mockconn.Read(archiveMessage(ResultNG, messageId, nil)),
+		mockconn.Write(archiveMessage(RegisterClient, sessionID, []byte("github.com/shibukawa/tobubus/1"))),
+		mockconn.Read(archiveMessage(ResultNG, sessionID, nil)),
 		mockconn.Close(),
 	)
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		plugin.receiveMessage()
 	}()
-	plugin.Register()
+	plugin.register()
 	socket.Verify()
 }
 
 func TestPluginUnregister(t *testing.T) {
 	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
-	messageId := plugin.sessions.getUniqueSessionID() + 1
+	sessionID := plugin.sessions.getUniqueSessionID() + 1
 	socket.SetExpectedActions(
-		mockconn.Write(archiveMessage(UnregisterClient, messageId, nil)),
-		mockconn.Read(archiveMessage(ResultOK, messageId, nil)),
+		mockconn.Write(archiveMessage(UnregisterClient, sessionID, nil)),
+		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
 		time.Sleep(10 * time.Millisecond)
@@ -55,10 +55,10 @@ func TestPluginUnregister(t *testing.T) {
 
 func TestPluginConfirmPath(t *testing.T) {
 	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
-	messageId := plugin.sessions.getUniqueSessionID() + 1
+	sessionID := plugin.sessions.getUniqueSessionID() + 1
 	socket.SetExpectedActions(
-		mockconn.Write(archiveMessage(ConfirmPath, messageId, []byte("/image/reader"))),
-		mockconn.Read(archiveMessage(ResultOK, messageId, nil)),
+		mockconn.Write(archiveMessage(ConfirmPath, sessionID, []byte("/image/reader"))),
+		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
 		time.Sleep(10 * time.Millisecond)
@@ -72,10 +72,10 @@ func TestPluginConfirmPath(t *testing.T) {
 
 func TestPluginPublish(t *testing.T) {
 	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
-	messageId := plugin.sessions.getUniqueSessionID() + 1
+	sessionID := plugin.sessions.getUniqueSessionID() + 1
 	socket.SetExpectedActions(
-		mockconn.Write(archiveMessage(Publish, messageId, []byte("/image/reader"))),
-		mockconn.Read(archiveMessage(ResultOK, messageId, nil)),
+		mockconn.Write(archiveMessage(Publish, sessionID, []byte("/image/reader"))),
+		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
 		time.Sleep(10 * time.Millisecond)
@@ -91,10 +91,10 @@ func TestPluginPublish(t *testing.T) {
 
 func TestPluginPublishTwice(t *testing.T) {
 	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
-	messageId := plugin.sessions.getUniqueSessionID() + 1
+	sessionID := plugin.sessions.getUniqueSessionID() + 1
 	socket.SetExpectedActions(
-		mockconn.Write(archiveMessage(Publish, messageId, []byte("/image/reader"))),
-		mockconn.Read(archiveMessage(ResultOK, messageId, nil)),
+		mockconn.Write(archiveMessage(Publish, sessionID, []byte("/image/reader"))),
+		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
 		time.Sleep(10 * time.Millisecond)
@@ -117,10 +117,10 @@ func TestPluginUnpublish(t *testing.T) {
 	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
 	proxy, _ := NewProxy("test")
 	plugin.objectMap["/image/reader"] = proxy
-	messageId := plugin.sessions.getUniqueSessionID() + 1
+	sessionID := plugin.sessions.getUniqueSessionID() + 1
 	socket.SetExpectedActions(
-		mockconn.Write(archiveMessage(Unpublish, messageId, []byte("/image/reader"))),
-		mockconn.Read(archiveMessage(ResultOK, messageId, nil)),
+		mockconn.Write(archiveMessage(Unpublish, sessionID, []byte("/image/reader"))),
+		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
 		time.Sleep(10 * time.Millisecond)
@@ -146,10 +146,10 @@ func TestPluginUnpublishNG(t *testing.T) {
 
 func TestPluginConfirmPathNG(t *testing.T) {
 	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
-	messageId := plugin.sessions.getUniqueSessionID() + 1
+	sessionID := plugin.sessions.getUniqueSessionID() + 1
 	socket.SetExpectedActions(
-		mockconn.Write(archiveMessage(ConfirmPath, messageId, []byte("/image/reader"))),
-		mockconn.Read(archiveMessage(ResultNG, messageId, nil)),
+		mockconn.Write(archiveMessage(ConfirmPath, sessionID, []byte("/image/reader"))),
+		mockconn.Read(archiveMessage(ResultNG, sessionID, nil)),
 	)
 	go func() {
 		time.Sleep(10 * time.Millisecond)
@@ -163,9 +163,9 @@ func TestPluginConfirmPathNG(t *testing.T) {
 
 func TestPluginCallMethod(t *testing.T) {
 	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
-	messageId := plugin.sessions.getUniqueSessionID() + 1
-	send, _ := archiveMethodCallMessage(CallMethod, messageId, "/image/reader", "open", []interface{}{"image.png"})
-	receive, _ := archiveMethodCallMessage(ReturnMethod, messageId, "", "", []interface{}{"ok"})
+	sessionID := plugin.sessions.getUniqueSessionID() + 1
+	send, _ := archiveMethodCallMessage(CallMethod, sessionID, "/image/reader", "open", []interface{}{"image.png"})
+	receive, _ := archiveMethodCallMessage(ReturnMethod, sessionID, "", "", []interface{}{"ok"})
 	socket.SetExpectedActions(
 		mockconn.Write(send),
 		mockconn.Read(receive),
@@ -187,10 +187,10 @@ func TestPluginCallMethod(t *testing.T) {
 
 func TestPluginCallLocalMethod(t *testing.T) {
 	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
-	messageId := plugin.sessions.getUniqueSessionID() + 1
+	sessionID := plugin.sessions.getUniqueSessionID() + 1
 	socket.SetExpectedActions(
-		mockconn.Write(archiveMessage(Publish, messageId, []byte("/image/reader"))),
-		mockconn.Read(archiveMessage(ResultOK, messageId, nil)),
+		mockconn.Write(archiveMessage(Publish, sessionID, []byte("/image/reader"))),
+		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
 		time.Sleep(10 * time.Millisecond)
@@ -222,9 +222,9 @@ func TestPluginCallLocalMethod(t *testing.T) {
 
 func TestPluginMethodCalledFromHost(t *testing.T) {
 	plugin, socket := newPluginForTest("pipe.test", "github.com/shibukawa/tobubus/1", t)
-	hostMessageId := uint32(45)
-	receive, _ := archiveMethodCallMessage(CallMethod, hostMessageId, "/image/reader", "TestMethod", []interface{}{"image.png"})
-	send, _ := archiveMethodCallMessage(ReturnMethod, hostMessageId, "", "", []interface{}{"ok"})
+	hostSessionID := uint32(45)
+	receive, _ := archiveMethodCallMessage(CallMethod, hostSessionID, "/image/reader", "TestMethod", []interface{}{"image.png"})
+	send, _ := archiveMethodCallMessage(ReturnMethod, hostSessionID, "", "", []interface{}{"ok"})
 
 	messageId := plugin.sessions.getUniqueSessionID() + 1
 

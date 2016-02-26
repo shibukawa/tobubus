@@ -1,23 +1,31 @@
 package tobubus
 
-/*import (
+import (
 	"github.com/shibukawa/mockconn"
 	"testing"
 	"time"
 )
 
-
-func TestHostStart(t *testing.T) {
+func TestHostStartAndRegisterAndUnregisterPlugin(t *testing.T) {
 	host := NewHost("pipe.test")
-	messageId := host.messageID() + 1
+	socket := mockconn.New(t)
+	sessionID := host.sessions.getUniqueSessionID() + 1
 	socket.SetExpectedActions(
-		mockconn.Write(archiveMessage(RegisterClient, messageId, []byte("github.com/shibukawa/tobubus/1"))),
-		mockconn.Read(archiveMessage(ResultOK, messageId, nil)),
+		mockconn.Read(archiveMessage(RegisterClient, sessionID, []byte("github.com/shibukawa/tobubus/1"))),
+		mockconn.Write(archiveMessage(ResultOK, sessionID, nil)),
+		mockconn.Write(archiveMessage(UnregisterClient, sessionID, nil)),
+		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
+	wait := make(chan string)
 	go func() {
+		host.receiveMessage(socket)
+		time.Sleep(20 * time.Millisecond)
+		host.receiveMessage(socket)
 		time.Sleep(10 * time.Millisecond)
-		host.receiveMessage()
+		wait <- "done"
 	}()
-	host.Register()
+	time.Sleep(10 * time.Millisecond)
+	host.Unregister("github.com/shibukawa/tobubus/1")
+	<-wait
 	socket.Verify()
-}*/
+}
