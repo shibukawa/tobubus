@@ -113,18 +113,21 @@ func (p *Plugin) Call(path, methodName string, params ...interface{}) ([]interfa
 	if p.socket == nil {
 		return nil, errors.New("Socket is already closed")
 	}
-	sessionID := p.sessions.getUniqueSessionID()
 	p.lock.RLock()
 	obj, ok := p.objectMap[path]
 	p.lock.RUnlock()
 	if ok {
 		return obj.Call(methodName, params...)
 	}
+	sessionID := p.sessions.getUniqueSessionID()
 	data, err := archiveMethodCallMessage(CallMethod, sessionID, path, methodName, params)
 	if err != nil {
 		return nil, err
 	}
-	p.socket.Write(data)
+	_, err = p.socket.Write(data)
+	if err != nil {
+		return nil, err
+	}
 	message := p.sessions.receiveAndClose(sessionID)
 	var result methodCall
 	err = json.Unmarshal(message.body, &result)
@@ -195,7 +198,7 @@ func (p *Plugin) receiveMessage() error {
 		}
 		return errors.New("socket closed")
 	case ConfirmPath:
-		// todo
+		p.socket.Write(archiveMessage(ResultNG, msg.ID, nil))
 	case RegisterClient:
 		p.socket.Write(archiveMessage(ResultNG, msg.ID, nil))
 	}

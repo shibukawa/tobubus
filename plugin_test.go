@@ -15,7 +15,7 @@ func TestPluginRegister(t *testing.T) {
 		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		plugin.receiveMessage()
 	}()
 	plugin.register()
@@ -31,7 +31,7 @@ func TestPluginRegisterError(t *testing.T) {
 		mockconn.Close(),
 	)
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		plugin.receiveMessage()
 	}()
 	plugin.register()
@@ -46,7 +46,7 @@ func TestPluginUnregister(t *testing.T) {
 		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		plugin.receiveMessage()
 	}()
 	plugin.Unregister()
@@ -61,7 +61,7 @@ func TestPluginConfirmPath(t *testing.T) {
 		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		plugin.receiveMessage()
 	}()
 	if !plugin.ConfirmPath("/image/reader") {
@@ -78,7 +78,7 @@ func TestPluginPublish(t *testing.T) {
 		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		plugin.receiveMessage()
 	}()
 	obj := testStruct{result: "ok"}
@@ -97,7 +97,7 @@ func TestPluginPublishTwice(t *testing.T) {
 		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		plugin.receiveMessage()
 	}()
 	obj := testStruct{result: "ok"}
@@ -123,7 +123,7 @@ func TestPluginUnpublish(t *testing.T) {
 		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		plugin.receiveMessage()
 	}()
 	err := plugin.Unpublish("/image/reader")
@@ -152,7 +152,7 @@ func TestPluginConfirmPathNG(t *testing.T) {
 		mockconn.Read(archiveMessage(ResultNG, sessionID, nil)),
 	)
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		plugin.receiveMessage()
 	}()
 	if plugin.ConfirmPath("/image/reader") {
@@ -171,7 +171,7 @@ func TestPluginCallMethod(t *testing.T) {
 		mockconn.Read(receive),
 	)
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		plugin.receiveMessage()
 	}()
 	result, err := plugin.Call("/image/reader", "open", "image.png")
@@ -193,7 +193,7 @@ func TestPluginCallLocalMethod(t *testing.T) {
 		mockconn.Read(archiveMessage(ResultOK, sessionID, nil)),
 	)
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		plugin.receiveMessage()
 	}()
 
@@ -238,11 +238,11 @@ func TestPluginMethodCalledFromHost(t *testing.T) {
 		mockconn.Write(send),
 	)
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		plugin.receiveMessage()
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		plugin.receiveMessage()
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		wg.Done()
 	}()
 	obj := testStruct{result: "ok"}

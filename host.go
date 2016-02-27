@@ -85,6 +85,61 @@ func (h *Host) Unregister(pluginID string) error {
 	return nil
 }
 
+func (h *Host) Publish(path string, service interface{}) error {
+	proxy, err := NewProxy(service)
+	if err != nil {
+		return err
+	}
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	h.localObjectMap[path] = proxy
+	return nil
+}
+
+func (h *Host) Unpublish(path string) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	_, ok := h.localObjectMap[path]
+	if ok {
+		delete(h.localObjectMap, path)
+		return nil
+	}
+	return fmt.Errorf("Unpublish error: no object is registered at '%s'", path)
+}
+
+func (h *Host) Call(path, methodName string, params ...interface{}) ([]interface{}, error) {
+	h.lock.RLock()
+	obj, ok := h.localObjectMap[path]
+	if ok {
+		h.lock.RUnlock()
+		return obj.Call(methodName, params...)
+	} else {
+		socket, ok := h.pluginReservedSpaces[path]
+		h.lock.RUnlock()
+		if ok {
+			sessionID := h.sessions.getUniqueSessionID()
+			data, err := archiveMethodCallMessage(CallMethod, sessionID, path, methodName, params)
+			if err != nil {
+				return nil, err
+			}
+			_, err = socket.Write(data)
+			if err != nil {
+				return nil, err
+			}
+			message := h.sessions.receiveAndClose(sessionID)
+			var result methodCall
+			err = json.Unmarshal(message.body, &result)
+			if err != nil {
+				return nil, err
+			}
+			return result.Params, nil
+		}
+		return nil, fmt.Errorf("There is no object in path '%s'.", path)
+	}
+
+	return nil, nil
+}
+
 func (h *Host) receiveMessage(socket net.Conn) error {
 	msg, err := parseMessage(socket)
 	if err != nil {
@@ -94,6 +149,30 @@ func (h *Host) receiveMessage(socket net.Conn) error {
 	case ResultOK, ResultNG, ReturnMethod:
 		channel := h.sessions.getChannelOfSessionID(msg.ID)
 		channel <- msg
+	case RegisterClient:
+		pluginID := string(msg.body)
+		h.lock.Lock()
+		_, ok := h.sockets[pluginID]
+		if ok {
+			h.lock.Unlock()
+			socket.Write(archiveMessage(ResultNG, msg.ID, nil))
+		} else {
+			socket.Write(archiveMessage(ResultOK, msg.ID, nil))
+			h.sockets[pluginID] = socket
+			h.lock.Unlock()
+		}
+	case Publish:
+		path := string(msg.body)
+		h.lock.Lock()
+		_, ok := h.pluginReservedSpaces[path]
+		if ok {
+			h.lock.Unlock()
+			socket.Write(archiveMessage(ResultNG, msg.ID, nil))
+		} else {
+			socket.Write(archiveMessage(ResultOK, msg.ID, nil))
+			h.pluginReservedSpaces[path] = socket
+			h.lock.Unlock()
+		}
 	case CallMethod:
 		go func() {
 			method := &methodCall{}
@@ -114,20 +193,27 @@ func (h *Host) receiveMessage(socket net.Conn) error {
 				socket.Write(resultMessage)
 			}
 		}()
-	case UnregisterClient, ConfirmPath:
-	// todo
-	case RegisterClient:
-		pluginID := string(msg.body)
-		h.lock.Lock()
-		_, ok := h.sockets[pluginID]
-		if ok {
-			h.lock.Unlock()
+	case UnregisterClient:
+		socketID := h.GetPluginID(socket)
+		if socketID == "" {
 			socket.Write(archiveMessage(ResultNG, msg.ID, nil))
 		} else {
-			socket.Write(archiveMessage(ResultOK, msg.ID, nil))
-			h.sockets[pluginID] = socket
+			h.lock.Lock()
+			var removeTargetPaths []string
+			for path, mappedSocket := range h.pluginReservedSpaces {
+				if mappedSocket == socket {
+					removeTargetPaths = append(removeTargetPaths, path)
+				}
+			}
+			for _, removeTargetPath := range removeTargetPaths {
+				delete(h.pluginReservedSpaces, removeTargetPath)
+			}
+			delete(h.sockets, socketID)
 			h.lock.Unlock()
+			socket.Write(archiveMessage(ResultOK, msg.ID, nil))
 		}
+	case ConfirmPath:
+		// todo
 	}
 	return nil
 }
