@@ -10,15 +10,23 @@ import (
 )
 
 type Plugin struct {
-	pipeName string
-	id       string
-	socket   net.Conn
-	sessions *sessionManager
-	lock     sync.RWMutex
+	pipeName  string
+	id        string
+	socket    net.Conn
+	connected bool
+	sessions  *sessionManager
+	lock      sync.RWMutex
 
 	objectMap map[string]*Proxy
 }
 
+// NewPlugin creates Plugin instance.
+//
+// First argument is pipe name.
+// ${TMP}/<pipename> for unix domain socket.
+// \\.\pipe\<pipename> for Windows named pipe.
+//
+// Second argument is a ID of plugin
 func NewPlugin(pipeName, id string) (*Plugin, error) {
 	socket, err := localsocket.NewLocalSocket(pipeName)
 	if err != nil {
@@ -33,13 +41,58 @@ func NewPlugin(pipeName, id string) (*Plugin, error) {
 	}, nil
 }
 
-func (p *Plugin) Unregister() error {
+// Register methods notifies to host that plugin is ready to work
+func (p *Plugin) Connect() (err error) {
+	if p.socket == nil {
+		return errors.New("Socket is already closed")
+	}
+	go func() {
+		for {
+			err = p.receiveMessage()
+			if err != nil {
+				break
+			}
+		}
+	}()
+	err = p.connect()
+	if err != nil {
+		p.Close()
+		return err
+	}
+	return
+}
+
+// Register methods notifies to host that plugin is ready to work
+func (p *Plugin) ConnectAndServe() (err error) {
+	if p.socket == nil {
+		return errors.New("Socket is already closed")
+	}
+	wait := make(chan error)
+	go func() {
+		for {
+			err = p.receiveMessage()
+			if err != nil {
+				wait <- err
+				break
+			}
+		}
+	}()
+	err = p.connect()
+	if err != nil {
+		p.Close()
+		return err
+	}
+	return <-wait
+}
+
+// Unregister methods notifies to host that plugin is not working anymore.
+func (p *Plugin) Close() error {
 	socket := p.socket
 	if socket == nil {
 		return errors.New("Socket is already closed")
 	}
 	sessionID := p.sessions.getUniqueSessionID()
-	socket.Write(archiveMessage(UnregisterClient, sessionID, nil))
+	socket.Write(archiveMessage(CloseClient, sessionID, nil))
 	message := p.sessions.receiveAndClose(sessionID)
 	err := socket.Close()
 	if err != nil {
@@ -66,42 +119,16 @@ func (p *Plugin) Publish(path string, service interface{}) error {
 	if p.socket == nil {
 		return errors.New("Socket is already closed")
 	}
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	proxy, err := NewProxy(service)
-	if _, ok := p.objectMap[path]; ok {
-		p.objectMap[path] = proxy
-		return nil
+	if p.connected {
+		return errors.New("Plugin is already connected to host")
 	}
+	proxy, err := NewProxy(service)
 	if err != nil {
 		return err
 	}
-	sessionID := p.sessions.getUniqueSessionID()
-	p.socket.Write(archiveMessage(Publish, sessionID, []byte(path)))
-	message := p.sessions.receiveAndClose(sessionID)
-	if message.Type != ResultOK {
-		return fmt.Errorf("Can't publish object at '%s'", path)
-	}
-	p.objectMap[path] = proxy
-	return nil
-}
-
-func (p *Plugin) Unpublish(path string) error {
-	if p.socket == nil {
-		return errors.New("Socket is already closed")
-	}
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	if _, ok := p.objectMap[path]; !ok {
-		return fmt.Errorf("No object is published at '%s'", path)
-	}
-	sessionID := p.sessions.getUniqueSessionID()
-	p.socket.Write(archiveMessage(Unpublish, sessionID, []byte(path)))
-	message := p.sessions.receiveAndClose(sessionID)
-	if message.Type != ResultOK {
-		return fmt.Errorf("Can't unpublish object at '%s'", path)
-	}
-	delete(p.objectMap, path)
+	p.objectMap[path] = proxy
 	return nil
 }
 
@@ -135,23 +162,6 @@ func (p *Plugin) Call(path, methodName string, params ...interface{}) ([]interfa
 		return nil, err
 	}
 	return result.Params, nil
-}
-
-func (p *Plugin) Register() (err error) {
-	if p.socket == nil {
-		return errors.New("Socket is already closed")
-	}
-	err = p.register()
-	if err != nil {
-		return err
-	}
-	for {
-		err = p.receiveMessage()
-		if err != nil {
-			break
-		}
-	}
-	return
 }
 
 func (p *Plugin) receiveMessage() error {
@@ -188,7 +198,7 @@ func (p *Plugin) receiveMessage() error {
 				p.socket.Write(resultMessage)
 			}
 		}()
-	case UnregisterClient:
+	case CloseClient:
 		socket := p.socket
 		p.socket = nil
 		socket.Write(archiveMessage(ResultOK, msg.ID, nil))
@@ -199,19 +209,37 @@ func (p *Plugin) receiveMessage() error {
 		return errors.New("socket closed")
 	case ConfirmPath:
 		p.socket.Write(archiveMessage(ResultNG, msg.ID, nil))
-	case RegisterClient:
+	case ConnectClient:
 		p.socket.Write(archiveMessage(ResultNG, msg.ID, nil))
 	}
 	return nil
 }
 
-func (p *Plugin) register() error {
+func (p *Plugin) connect() error {
 	sessionID := p.sessions.getUniqueSessionID()
-	p.socket.Write(archiveMessage(RegisterClient, sessionID, []byte(p.id)))
+	p.socket.Write(archiveMessage(ConnectClient, sessionID, []byte(p.id)))
 	message := p.sessions.receiveAndClose(sessionID)
 	if message.Type != ResultOK {
 		p.socket.Close()
 		return fmt.Errorf("Can't connect to '%s'", p.pipeName)
+	}
+	for path, proxy := range p.objectMap {
+		err := p.publish(path, proxy)
+		if err != nil {
+			p.socket.Close()
+			return err
+		}
+	}
+	p.connected = true
+	return nil
+}
+
+func (p *Plugin) publish(path string, proxy *Proxy) error {
+	sessionID := p.sessions.getUniqueSessionID()
+	p.socket.Write(archiveMessage(Publish, sessionID, []byte(path)))
+	message := p.sessions.receiveAndClose(sessionID)
+	if message.Type != ResultOK {
+		return fmt.Errorf("Can't publish object at '%s'", path)
 	}
 	return nil
 }

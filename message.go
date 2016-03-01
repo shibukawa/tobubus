@@ -14,8 +14,8 @@ const (
 	ResultNG                         = 0x2
 	ResultObjectNotFound             = 0x3
 	ResultMethodNotFound             = 0x4
-	RegisterClient                   = 0x10
-	UnregisterClient                 = 0x11
+	ConnectClient                    = 0x10
+	CloseClient                      = 0x11
 	ConfirmPath                      = 0x20
 	Publish                          = 0x21
 	Unpublish                        = 0x22

@@ -13,10 +13,10 @@ func TestHostRegisterAndUnregisterPluginOK(t *testing.T) {
 	hostSessionID := host.sessions.getUniqueSessionID() + 1
 	socket.SetExpectedActions(
 		// Receive Register request
-		mockconn.Read(archiveMessage(RegisterClient, pluginSessionID, []byte("github.com/shibukawa/tobubus/1"))),
+		mockconn.Read(archiveMessage(ConnectClient, pluginSessionID, []byte("github.com/shibukawa/tobubus/1"))),
 		mockconn.Write(archiveMessage(ResultOK, pluginSessionID, nil)),
 		// Send Unregister request from host
-		mockconn.Write(archiveMessage(UnregisterClient, hostSessionID, nil)),
+		mockconn.Write(archiveMessage(CloseClient, hostSessionID, nil)),
 		mockconn.Read(archiveMessage(ResultOK, hostSessionID, nil)),
 	)
 	wait := make(chan string)
@@ -46,7 +46,7 @@ func TestHostRegisterAndUnregisterPluginNG(t *testing.T) {
 	var pluginSessionID uint32 = 0
 	socket.SetExpectedActions(
 		// Receive Register request
-		mockconn.Read(archiveMessage(RegisterClient, pluginSessionID, []byte("github.com/shibukawa/tobubus/1"))),
+		mockconn.Read(archiveMessage(ConnectClient, pluginSessionID, []byte("github.com/shibukawa/tobubus/1"))),
 		mockconn.Write(archiveMessage(ResultOK, pluginSessionID, nil)),
 	)
 	wait := make(chan string)
@@ -70,10 +70,10 @@ func TestHostUnregisterPluginFromPluginOK(t *testing.T) {
 	var pluginSessionID uint32 = 0
 	socket.SetExpectedActions(
 		// Receive Register from client here
-		mockconn.Read(archiveMessage(RegisterClient, pluginSessionID, []byte("github.com/shibukawa/tobubus/1"))),
+		mockconn.Read(archiveMessage(ConnectClient, pluginSessionID, []byte("github.com/shibukawa/tobubus/1"))),
 		mockconn.Write(archiveMessage(ResultOK, pluginSessionID, nil)),
 		// Receive Unregister request from plugin
-		mockconn.Read(archiveMessage(UnregisterClient, pluginSessionID+1, nil)),
+		mockconn.Read(archiveMessage(CloseClient, pluginSessionID+1, nil)),
 		mockconn.Write(archiveMessage(ResultOK, pluginSessionID+1, nil)),
 	)
 	wait := make(chan string)
@@ -99,12 +99,12 @@ func TestHostUnregisterPluginFromPluginNG(t *testing.T) {
 	var pluginSessionID uint32 = 0
 	socket.SetExpectedActions(
 		// Receive Register from client here
-		mockconn.Read(archiveMessage(RegisterClient, pluginSessionID, []byte("github.com/shibukawa/tobubus/1"))),
+		mockconn.Read(archiveMessage(ConnectClient, pluginSessionID, []byte("github.com/shibukawa/tobubus/1"))),
 		mockconn.Write(archiveMessage(ResultOK, pluginSessionID, nil)),
 	)
 	wrongSocket.SetExpectedActions(
 		// Receive Unregister request from wrong plugin
-		mockconn.Read(archiveMessage(UnregisterClient, pluginSessionID+1, nil)),
+		mockconn.Read(archiveMessage(CloseClient, pluginSessionID+1, nil)),
 		mockconn.Write(archiveMessage(ResultNG, pluginSessionID+1, nil)),
 	)
 	wait := make(chan string)
@@ -234,7 +234,7 @@ func TestHostCallPluginFunctionOK(t *testing.T) {
 	receive, _ := archiveMethodCallMessage(ReturnMethod, hostSessionID, "", "", []interface{}{"ok"})
 	pluginSessionID := uint32(1)
 	socket.SetExpectedActions(
-		mockconn.Read(archiveMessage(RegisterClient, pluginSessionID, []byte("github.com/shibukawa/tobubus/1"))),
+		mockconn.Read(archiveMessage(ConnectClient, pluginSessionID, []byte("github.com/shibukawa/tobubus/1"))),
 		mockconn.Write(archiveMessage(ResultOK, pluginSessionID, nil)),
 		mockconn.Read(archiveMessage(Publish, pluginSessionID+1, []byte("/image/reader"))),
 		mockconn.Write(archiveMessage(ResultOK, pluginSessionID+1, nil)),
@@ -276,7 +276,7 @@ func TestHostLocalInstanceHasHigherPriority(t *testing.T) {
 	socket := mockconn.New(t)
 	pluginSessionID := uint32(1)
 	socket.SetExpectedActions(
-		mockconn.Read(archiveMessage(RegisterClient, pluginSessionID, []byte("github.com/shibukawa/tobubus/1"))),
+		mockconn.Read(archiveMessage(ConnectClient, pluginSessionID, []byte("github.com/shibukawa/tobubus/1"))),
 		mockconn.Write(archiveMessage(ResultOK, pluginSessionID, nil)),
 		mockconn.Read(archiveMessage(Publish, pluginSessionID+1, []byte("/image/reader"))),
 		mockconn.Write(archiveMessage(ResultOK, pluginSessionID+1, nil)),
@@ -300,5 +300,45 @@ func TestHostLocalInstanceHasHigherPriority(t *testing.T) {
 	} else if obj.args[0] != "test value2" {
 		t.Errorf("obj.args[0] should be 'test value2', but %v", obj.args[0])
 	}
+	socket.Verify()
+}
+
+func TestHostConfirmPathLocal(t *testing.T) {
+	// Host -> Plugin
+	host := newHostForTest("pipe.test")
+	obj := testStruct{result: "ok"}
+	err := host.Publish("/image/reader", &obj)
+	if err != nil {
+		t.Errorf("error should be nil, but %v", err)
+	}
+	if !host.ConfirmPath("/image/reader") {
+		t.Error("ConfirmPath should be true if the path exists")
+	}
+	if host.ConfirmPath("/image/reader/wrong") {
+		t.Error("ConfirmPath should be false if the path does not exist")
+	}
+}
+
+func TestHostReceiveConfirmPath(t *testing.T) {
+	host := newHostForTest("pipe.test")
+	obj := testStruct{result: "ok"}
+	err := host.Publish("/image/reader", &obj)
+	if err != nil {
+		t.Errorf("error should be nil, but %v", err)
+	}
+	socket := mockconn.New(t)
+	pluginSessionID := uint32(1)
+	socket.SetExpectedActions(
+		mockconn.Read(archiveMessage(ConfirmPath, pluginSessionID+1, []byte("/image/reader"))),
+		mockconn.Write(archiveMessage(ResultOK, pluginSessionID+1, nil)),
+	)
+	wait := make(chan string)
+	go func() {
+		host.receiveMessage(socket)
+		wait <- "done"
+	}()
+	time.Sleep(time.Millisecond)
+	// receive ConfirmPath from client here
+	<-wait
 	socket.Verify()
 }

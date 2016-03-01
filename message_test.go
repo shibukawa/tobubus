@@ -7,7 +7,7 @@ import (
 )
 
 func TestArchiveMessage(t *testing.T) {
-	data := archiveMessage(RegisterClient, 0, []byte("github.com/shibukawa/tobubus/1"))
+	data := archiveMessage(ConnectClient, 0, []byte("github.com/shibukawa/tobubus/1"))
 	expected := []byte("\x10\x00\x00\x00\x00\x00\x00\x00\x1e\x00\x00\x00github.com/shibukawa/tobubus/1")
 	if bytes.Compare(expected, data) != 0 {
 		t.Errorf("archive error. expected='%v' actual='%v'", expected, data)
@@ -23,7 +23,7 @@ func TestParseMessage(t *testing.T) {
 	if err != nil {
 		t.Errorf("err should be nil, but %v", err)
 	}
-	if message.Type != RegisterClient {
+	if message.Type != ConnectClient {
 		t.Errorf("parse error: %v", message.Type)
 	}
 	if string(message.body) != "github.com/shibukawa/tobubus/1" {
@@ -32,7 +32,7 @@ func TestParseMessage(t *testing.T) {
 }
 
 func TestArchiveMethodCall(t *testing.T) {
-	data, err := archiveMethodCallMessage(RegisterClient, 0, "/image", "open", []interface{}{"test.png", 0777})
+	data, err := archiveMethodCallMessage(ConnectClient, 0, "/image", "open", []interface{}{"test.png", 0777})
 	if err != nil {
 		t.Errorf("err should be nil, but %v", err)
 		return

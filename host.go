@@ -67,6 +67,14 @@ func (h *Host) listenAndServeTo(socket net.Conn) (err error) {
 	return
 }
 
+func (h *Host) Close() error {
+	for _, socket := range h.sockets {
+		socket.Close()
+	}
+	h.server.Close()
+	return nil
+}
+
 func (h *Host) Unregister(pluginID string) error {
 	sessionID := h.sessions.getUniqueSessionID()
 	h.lock.Lock()
@@ -76,7 +84,7 @@ func (h *Host) Unregister(pluginID string) error {
 	if !ok {
 		return fmt.Errorf("plugin id '%s' is not registered", pluginID)
 	}
-	socket.Write(archiveMessage(UnregisterClient, sessionID, nil))
+	socket.Write(archiveMessage(CloseClient, sessionID, nil))
 	message := h.sessions.receiveAndClose(sessionID)
 	socket.Close()
 	if message.Type != ResultOK {
@@ -140,6 +148,15 @@ func (h *Host) Call(path, methodName string, params ...interface{}) ([]interface
 	return nil, nil
 }
 
+func (h *Host) ConfirmPath(path string) bool {
+	_, ok := h.localObjectMap[path]
+	if ok {
+		return true
+	}
+	_, ok = h.pluginReservedSpaces[path]
+	return ok
+}
+
 func (h *Host) receiveMessage(socket net.Conn) error {
 	msg, err := parseMessage(socket)
 	if err != nil {
@@ -149,7 +166,7 @@ func (h *Host) receiveMessage(socket net.Conn) error {
 	case ResultOK, ResultNG, ReturnMethod:
 		channel := h.sessions.getChannelOfSessionID(msg.ID)
 		channel <- msg
-	case RegisterClient:
+	case ConnectClient:
 		pluginID := string(msg.body)
 		h.lock.Lock()
 		_, ok := h.sockets[pluginID]
@@ -193,7 +210,7 @@ func (h *Host) receiveMessage(socket net.Conn) error {
 				socket.Write(resultMessage)
 			}
 		}()
-	case UnregisterClient:
+	case CloseClient:
 		socketID := h.GetPluginID(socket)
 		if socketID == "" {
 			socket.Write(archiveMessage(ResultNG, msg.ID, nil))
@@ -213,7 +230,12 @@ func (h *Host) receiveMessage(socket net.Conn) error {
 			socket.Write(archiveMessage(ResultOK, msg.ID, nil))
 		}
 	case ConfirmPath:
-		// todo
+		_, ok := h.localObjectMap[string(msg.body)]
+		if ok {
+			socket.Write(archiveMessage(ResultOK, msg.ID, nil))
+		} else {
+			socket.Write(archiveMessage(ResultObjectNotFound, msg.ID, nil))
+		}
 	}
 	return nil
 }
