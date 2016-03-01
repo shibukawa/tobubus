@@ -128,7 +128,7 @@ func TestPluginCallMethod(t *testing.T) {
 	}()
 	result, err := plugin.Call("/image/reader", "open", "image.png")
 	if err != nil {
-		t.Error("result should be true")
+		t.Errorf("err should be nil, %v", err)
 	} else if len(result) != 1 {
 		t.Errorf("result count should be 1, but %d", len(result))
 	} else if result[0].(string) != "ok" {

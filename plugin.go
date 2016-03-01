@@ -1,7 +1,6 @@
 package tobubus
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/shibukawa/localsocket"
@@ -156,11 +155,7 @@ func (p *Plugin) Call(path, methodName string, params ...interface{}) ([]interfa
 		return nil, err
 	}
 	message := p.sessions.receiveAndClose(sessionID)
-	var result methodCall
-	err = json.Unmarshal(message.body, &result)
-	if err != nil {
-		return nil, err
-	}
+	result := parseMethodCallMessage(message.body)
 	return result.Params, nil
 }
 
@@ -178,8 +173,7 @@ func (p *Plugin) receiveMessage() error {
 		channel <- msg
 	case CallMethod:
 		go func() {
-			method := &methodCall{}
-			json.Unmarshal(msg.body, method)
+			method := parseMethodCallMessage(msg.body)
 			p.lock.RLock()
 			obj, ok := p.objectMap[method.Path]
 			p.lock.RUnlock()

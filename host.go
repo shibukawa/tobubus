@@ -1,7 +1,6 @@
 package tobubus
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/shibukawa/localsocket"
 	"net"
@@ -135,11 +134,7 @@ func (h *Host) Call(path, methodName string, params ...interface{}) ([]interface
 				return nil, err
 			}
 			message := h.sessions.receiveAndClose(sessionID)
-			var result methodCall
-			err = json.Unmarshal(message.body, &result)
-			if err != nil {
-				return nil, err
-			}
+			result := parseMethodCallMessage(message.body)
 			return result.Params, nil
 		}
 		return nil, fmt.Errorf("There is no object in path '%s'.", path)
@@ -192,8 +187,7 @@ func (h *Host) receiveMessage(socket net.Conn) error {
 		}
 	case CallMethod:
 		go func() {
-			method := &methodCall{}
-			json.Unmarshal(msg.body, method)
+			method := parseMethodCallMessage(msg.body)
 			obj, ok := h.localObjectMap[method.Path]
 			if !ok {
 				socket.Write(archiveMessage(ResultObjectNotFound, msg.ID, nil))

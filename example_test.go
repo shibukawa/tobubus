@@ -8,7 +8,7 @@ import (
 type Calculator struct {
 }
 
-func (c Calculator) Fib(n float64) float64 {
+func (c Calculator) Fib(n int64) int64 {
 	if n < 2 {
 		return n
 	}
@@ -49,7 +49,7 @@ func Example() {
 	if err != nil {
 		fmt.Println(err.Error())
 	}
-	fmt.Println(results[0].(float64))
+	fmt.Println(results[0].(int64))
 	// Output:
 	// 55
 	wait <- "finish"

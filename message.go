@@ -2,7 +2,7 @@ package tobubus
 
 import (
 	"encoding/binary"
-	"encoding/json"
+	"github.com/ugorji/go/codec"
 	"io"
 	"net"
 )
@@ -30,9 +30,9 @@ type message struct {
 }
 
 type methodCall struct {
-	Path   string        `json:"path,omitempty"`
-	Method string        `json:"method,omitempty"`
-	Params []interface{} `json:"params"`
+	Path   string        `codec:"path,omitempty"`
+	Method string        `codec:"method,omitempty"`
+	Params []interface{} `codec:"params"`
 }
 
 func archiveMessage(msg MessageType, sessionID uint32, body []byte) []byte {
@@ -69,14 +69,26 @@ func parseMessage(conn net.Conn) (*message, error) {
 }
 
 func archiveMethodCallMessage(msg MessageType, msgID uint32, path, methodName string, params []interface{}) ([]byte, error) {
+	var mh codec.MsgpackHandle
 	src := methodCall{
 		Path:   path,
 		Method: methodName,
 		Params: params,
 	}
-	data, err := json.Marshal(src)
+	var data []byte
+	enc := codec.NewEncoderBytes(&data, &mh)
+	err := enc.Encode(src)
 	if err != nil {
 		return nil, err
 	}
 	return archiveMessage(msg, msgID, data), nil
+}
+
+func parseMethodCallMessage(data []byte) *methodCall {
+	var mh codec.MsgpackHandle
+	mh.RawToString = true
+	result := &methodCall{}
+	dec := codec.NewDecoderBytes(data, &mh)
+	dec.Decode(result)
+	return result
 }
