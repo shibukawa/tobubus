@@ -69,14 +69,15 @@ func parseMessage(conn net.Conn) (*message, error) {
 }
 
 func archiveMethodCallMessage(msg MessageType, msgID uint32, path, methodName string, params []interface{}) ([]byte, error) {
-	var mh codec.MsgpackHandle
+	var ch codec.CborHandle
 	src := methodCall{
 		Path:   path,
 		Method: methodName,
 		Params: params,
 	}
 	var data []byte
-	enc := codec.NewEncoderBytes(&data, &mh)
+	ch.SignedInteger = true
+	enc := codec.NewEncoderBytes(&data, &ch)
 	err := enc.Encode(src)
 	if err != nil {
 		return nil, err
@@ -85,10 +86,10 @@ func archiveMethodCallMessage(msg MessageType, msgID uint32, path, methodName st
 }
 
 func parseMethodCallMessage(data []byte) *methodCall {
-	var mh codec.MsgpackHandle
-	mh.RawToString = true
+	var ch codec.CborHandle
+	ch.SignedInteger = true
 	result := &methodCall{}
-	dec := codec.NewDecoderBytes(data, &mh)
+	dec := codec.NewDecoderBytes(data, &ch)
 	dec.Decode(result)
 	return result
 }

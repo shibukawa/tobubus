@@ -45,7 +45,7 @@ func Example() {
 	}
 
 	// Call plugin's method
-	results, err := host.Call("/calculator", "Fib", 10)
+	results, err := host.Call("/calculator", "Fib", int(10))
 	if err != nil {
 		fmt.Println(err.Error())
 	}
