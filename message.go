@@ -14,6 +14,7 @@ const (
 	ResultNG                         = 0x2
 	ResultObjectNotFound             = 0x3
 	ResultMethodNotFound             = 0x4
+	ResultMethodError                = 0x5
 	ConnectClient                    = 0x10
 	CloseClient                      = 0x11
 	ConfirmPath                      = 0x20

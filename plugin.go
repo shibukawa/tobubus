@@ -3,7 +3,9 @@ package tobubus
 import (
 	"errors"
 	"fmt"
+	"github.com/k0kubun/pp"
 	"github.com/shibukawa/localsocket"
+	"log"
 	"net"
 	"sync"
 )
@@ -181,6 +183,15 @@ func (p *Plugin) receiveMessage() error {
 				p.socket.Write(archiveMessage(ResultObjectNotFound, msg.ID, nil))
 				return
 			}
+			defer func() {
+				err := recover()
+				if err != nil {
+					log.Printf("Remote Method Call Error: msgID: %d path: '%s' method: '%s'\n", msg.ID, method.Path, method.Method)
+					log.Printf("Params: %s\n", pp.Sprint(method.Params))
+					log.Printf("Error Detail: %v\n", err)
+					p.socket.Write(archiveMessage(ResultMethodError, msg.ID, nil))
+				}
+			}()
 			result, err := obj.Call(method.Method, method.Params...)
 			if err != nil {
 				p.socket.Write(archiveMessage(ResultMethodNotFound, msg.ID, nil))

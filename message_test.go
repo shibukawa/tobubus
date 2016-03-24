@@ -41,9 +41,4 @@ func TestArchiveMethodCall(t *testing.T) {
 	socket.SetExpectedActions(
 		mockconn.Read(data),
 	)
-	return
-	message, err := parseMessage(socket)
-	if string(message.body) != `{path:"image",method:"open",param:["test.png",511]}` {
-		t.Errorf("archive error: %v", string(message.body))
-	}
 }
