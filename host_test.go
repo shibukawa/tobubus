@@ -245,11 +245,12 @@ func TestHostCallPluginFunctionOK(t *testing.T) {
 	go func() {
 		host.receiveMessage(socket)
 		host.receiveMessage(socket)
-		time.Sleep(2 * time.Millisecond)
+		wait <- "before call"
+		time.Sleep(time.Millisecond)
 		host.receiveMessage(socket)
 		wait <- "done"
 	}()
-	time.Sleep(time.Millisecond)
+	<-wait
 	// receive Register from client here
 	// receive Publish from client here
 	result, err := host.Call("/image/reader", "TestMethod", "test value")

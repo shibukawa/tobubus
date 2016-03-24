@@ -1,6 +1,7 @@
 package tobubus
 
 import (
+	"errors"
 	"fmt"
 	"github.com/shibukawa/localsocket"
 	"net"
@@ -19,21 +20,19 @@ type Host struct {
 }
 
 func NewHost(pipeName string) *Host {
-	server := localsocket.NewLocalServer(pipeName)
 	host := &Host{
-		server:               server,
+		pipeName:             pipeName,
 		sessions:             newSessionManager(recycleStrategy),
 		pluginReservedSpaces: make(map[string]net.Conn),
 		localObjectMap:       make(map[string]*Proxy),
 		sockets:              make(map[string]net.Conn),
 	}
-	server.SetOnConnectionCallback(func(socket net.Conn) {
-		go host.listenAndServeTo(socket)
-	})
 	return host
 }
 
 func (h *Host) GetSocket(pluginID string) net.Conn {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
 	return h.sockets[pluginID]
 }
 
@@ -49,10 +48,16 @@ func (h *Host) GetPluginID(pluginSocket net.Conn) string {
 }
 
 func (h *Host) Listen() error {
+	h.Close()
+	h.server = localsocket.NewLocalServer(h.pipeName)
+	h.server.SetOnConnectionCallback(func(socket net.Conn) {
+		go h.listenAndServeTo(socket)
+	})
+
 	return h.server.Listen()
 }
 
-func (h *Host) ListenAndServer() error {
+func (h *Host) ListenAndServe() error {
 	return h.server.ListenAndServe()
 }
 
@@ -67,22 +72,49 @@ func (h *Host) listenAndServeTo(socket net.Conn) (err error) {
 }
 
 func (h *Host) Close() error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	if h.server == nil {
+		return errors.New("Server is not running")
+	}
 	for _, socket := range h.sockets {
 		socket.Close()
 	}
+	h.pluginReservedSpaces = make(map[string]net.Conn)
+	h.sockets = make(map[string]net.Conn)
 	h.server.Close()
+	h.server = nil
 	return nil
 }
 
 func (h *Host) Unregister(pluginID string) error {
-	sessionID := h.sessions.getUniqueSessionID()
 	h.lock.Lock()
 	socket, ok := h.sockets[pluginID]
-	delete(h.sockets, pluginID)
+	if ok {
+		h.unregister(socket, pluginID)
+	}
 	h.lock.Unlock()
 	if !ok {
 		return fmt.Errorf("plugin id '%s' is not registered", pluginID)
 	}
+	return h.sendCloseClientMessage(socket, pluginID)
+}
+
+func (h *Host) unregister(socket net.Conn, pluginID string) {
+	delete(h.sockets, pluginID)
+	var removedKeys []string
+	for path, existingSocket := range h.pluginReservedSpaces {
+		if socket == existingSocket {
+			removedKeys = append(removedKeys, path)
+		}
+	}
+	for _, key := range removedKeys {
+		delete(h.pluginReservedSpaces, key)
+	}
+}
+
+func (h *Host) sendCloseClientMessage(socket net.Conn, pluginID string) error {
+	sessionID := h.sessions.getUniqueSessionID()
 	socket.Write(archiveMessage(CloseClient, sessionID, nil))
 	message := h.sessions.receiveAndClose(sessionID)
 	socket.Close()
@@ -120,27 +152,24 @@ func (h *Host) Call(path, methodName string, params ...interface{}) ([]interface
 	if ok {
 		h.lock.RUnlock()
 		return obj.Call(methodName, params...)
-	} else {
-		socket, ok := h.pluginReservedSpaces[path]
-		h.lock.RUnlock()
-		if ok {
-			sessionID := h.sessions.getUniqueSessionID()
-			data, err := archiveMethodCallMessage(CallMethod, sessionID, path, methodName, params)
-			if err != nil {
-				return nil, err
-			}
-			_, err = socket.Write(data)
-			if err != nil {
-				return nil, err
-			}
-			message := h.sessions.receiveAndClose(sessionID)
-			result := parseMethodCallMessage(message.body)
-			return result.Params, nil
-		}
-		return nil, fmt.Errorf("There is no object in path '%s'.", path)
 	}
-
-	return nil, nil
+	socket, ok := h.pluginReservedSpaces[path]
+	h.lock.RUnlock()
+	if ok {
+		sessionID := h.sessions.getUniqueSessionID()
+		data, err := archiveMethodCallMessage(CallMethod, sessionID, path, methodName, params)
+		if err != nil {
+			return nil, err
+		}
+		_, err = socket.Write(data)
+		if err != nil {
+			return nil, err
+		}
+		message := h.sessions.receiveAndClose(sessionID)
+		result := parseMethodCallMessage(message.body)
+		return result.Params, nil
+	}
+	return nil, fmt.Errorf("There is no object in path '%s'.", path)
 }
 
 func (h *Host) ConfirmPath(path string) bool {
@@ -164,27 +193,27 @@ func (h *Host) receiveMessage(socket net.Conn) error {
 	case ConnectClient:
 		pluginID := string(msg.body)
 		h.lock.Lock()
-		_, ok := h.sockets[pluginID]
+		existingSocket, ok := h.sockets[pluginID]
 		if ok {
-			h.lock.Unlock()
-			socket.Write(archiveMessage(ResultNG, msg.ID, nil))
-		} else {
-			socket.Write(archiveMessage(ResultOK, msg.ID, nil))
-			h.sockets[pluginID] = socket
-			h.lock.Unlock()
+			h.unregister(existingSocket, pluginID)
+			h.sendCloseClientMessage(existingSocket, pluginID)
 		}
+		socket.Write(archiveMessage(ResultOK, msg.ID, nil))
+		h.sockets[pluginID] = socket
+		h.lock.Unlock()
 	case Publish:
 		path := string(msg.body)
 		h.lock.Lock()
-		_, ok := h.pluginReservedSpaces[path]
+		existingSocket, ok := h.pluginReservedSpaces[path]
 		if ok {
-			h.lock.Unlock()
-			socket.Write(archiveMessage(ResultNG, msg.ID, nil))
-		} else {
-			socket.Write(archiveMessage(ResultOK, msg.ID, nil))
-			h.pluginReservedSpaces[path] = socket
-			h.lock.Unlock()
+			sessionID := h.sessions.getUniqueSessionID()
+			existingSocket.Write(archiveMessage(Unpublish, sessionID, msg.body))
+			h.sessions.receiveAndClose(sessionID)
 		}
+		h.pluginReservedSpaces[path] = socket
+		socket.Write(archiveMessage(ResultOK, msg.ID, nil))
+
+		h.lock.Unlock()
 	case CallMethod:
 		go func() {
 			method := parseMethodCallMessage(msg.body)
